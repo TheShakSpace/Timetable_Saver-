@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Download, Upload, Plus, Trash2, Check } from 'lucide-react';
 
+
 export default function TimetableTracker() {
   const [tasks, setTasks] = useState([
     { id: 1, title: 'Morning Exercise', time: '6:00 AM' },
@@ -14,6 +15,25 @@ export default function TimetableTracker() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTask, setNewTask] = useState({ title: '', time: '' });
   const [showAddTask, setShowAddTask] = useState(false);
+
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('timetable-data');
+    if (savedData) {
+      try {
+        const data = JSON.parse(savedData);
+        if (data.tasks) setTasks(data.tasks);
+        if (data.progress) setProgress(data.progress);
+      } catch (err) {
+        console.error('Failed to load saved data:', err);
+      }
+    }
+  }, []);
+
+  // Save data to localStorage whenever tasks or progress changes
+  useEffect(() => {
+    localStorage.setItem('timetable-data', JSON.stringify({ tasks, progress }));
+  }, [tasks, progress]);
 
   const toggleTask = (taskId) => {
     setProgress(prev => ({
@@ -48,8 +68,9 @@ export default function TimetableTracker() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `timetable-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `timetable-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
   const importData = (e) => {
@@ -61,124 +82,96 @@ export default function TimetableTracker() {
           const data = JSON.parse(event.target.result);
           if (data.tasks) setTasks(data.tasks);
           if (data.progress) setProgress(data.progress);
+          alert('Data imported successfully!');
         } catch (err) {
-          alert('Invalid file format');
+          alert('Invalid file format. Please select a valid backup file.');
         }
       };
       reader.readAsText(file);
     }
+    // Reset the input so the same file can be selected again
+    e.target.value = '';
   };
 
   const completedToday = tasks.filter(t => progress[selectedDate]?.[t.id]).length;
   const progressPercent = tasks.length > 0 ? (completedToday / tasks.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="app-container">
+      <div className="content-wrapper">
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-amber-900 mb-2" style={{ fontFamily: 'Georgia, serif' }}>
-            Daily Planner
-          </h1>
-          <p className="text-amber-700" style={{ fontFamily: 'Georgia, serif' }}>
-            Track your daily routine with style
-          </p>
+        <div className="header">
+          <h1 className="main-title">Daily Planner</h1>
+          <p className="subtitle">Track your daily routine with style</p>
         </div>
 
         {/* Main Card */}
-        <div className="bg-amber-50/80 backdrop-blur-sm rounded-3xl shadow-2xl p-6 md:p-8 border-2 border-amber-200">
+        <div className="main-card">
           {/* Date Picker & Actions */}
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between mb-6">
-            <div className="flex items-center gap-3 bg-white/60 rounded-2xl px-4 py-3 shadow-md border border-amber-200">
-              <Calendar className="text-amber-700" size={20} />
+          <div className="controls-section">
+            <div className="date-picker-wrapper">
+              <Calendar className="calendar-icon" size={20} />
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent border-none outline-none text-amber-900 font-semibold"
-                style={{ fontFamily: 'Georgia, serif' }}
+                className="date-input"
               />
             </div>
             
-            <div className="flex gap-2">
-              <button
-                onClick={exportData}
-                className="bg-amber-600 hover:bg-amber-700 text-white rounded-2xl px-4 py-2 flex items-center gap-2 transition-all shadow-md hover:shadow-lg"
-                style={{ fontFamily: 'Georgia, serif' }}
-              >
+            <div className="button-group">
+              <button onClick={exportData} className="btn btn-export">
                 <Download size={18} />
                 Export
               </button>
-              <label className="bg-rose-600 hover:bg-rose-700 text-white rounded-2xl px-4 py-2 flex items-center gap-2 transition-all shadow-md hover:shadow-lg cursor-pointer"
-                style={{ fontFamily: 'Georgia, serif' }}>
+              <label className="btn btn-import">
                 <Upload size={18} />
                 Import
-                <input type="file" accept=".json" onChange={importData} className="hidden" />
+                <input type="file" accept=".json" onChange={importData} className="file-input" />
               </label>
             </div>
           </div>
 
           {/* Progress Bar */}
-          <div className="mb-6">
-            <div className="flex justify-between mb-2">
-              <span className="text-amber-900 font-semibold" style={{ fontFamily: 'Georgia, serif' }}>
-                Today's Progress
-              </span>
-              <span className="text-amber-700 font-semibold" style={{ fontFamily: 'Georgia, serif' }}>
-                {completedToday} / {tasks.length}
-              </span>
+          <div className="progress-section">
+            <div className="progress-header">
+              <span className="progress-label">Today's Progress</span>
+              <span className="progress-count">{completedToday} / {tasks.length}</span>
             </div>
-            <div className="h-4 bg-amber-200 rounded-full overflow-hidden shadow-inner">
+            <div className="progress-bar-container">
               <div
-                className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-500 ease-out rounded-full"
+                className="progress-bar-fill"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
 
           {/* Tasks List */}
-          <div className="space-y-3 mb-6">
+          <div className="tasks-list">
             {tasks.map(task => (
               <div
                 key={task.id}
-                className={`bg-white/70 backdrop-blur-sm rounded-2xl p-4 flex items-center gap-4 border-2 transition-all hover:shadow-lg ${
-                  progress[selectedDate]?.[task.id]
-                    ? 'border-green-400 bg-green-50/50'
-                    : 'border-amber-200 hover:border-amber-300'
-                }`}
+                className={`task-item ${progress[selectedDate]?.[task.id] ? 'completed' : ''}`}
               >
                 <button
                   onClick={() => toggleTask(task.id)}
-                  className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${
-                    progress[selectedDate]?.[task.id]
-                      ? 'bg-green-500 border-green-500'
-                      : 'border-amber-400 hover:border-amber-500'
-                  }`}
+                  className="checkbox"
                 >
                   {progress[selectedDate]?.[task.id] && (
-                    <Check size={18} className="text-white" strokeWidth={3} />
+                    <Check size={18} className="check-icon" strokeWidth={3} />
                   )}
                 </button>
                 
-                <div className="flex-1">
-                  <h3
-                    className={`font-semibold text-lg ${
-                      progress[selectedDate]?.[task.id]
-                        ? 'line-through text-gray-500'
-                        : 'text-amber-900'
-                    }`}
-                    style={{ fontFamily: 'Georgia, serif' }}
-                  >
+                <div className="task-content">
+                  <h3 className="task-title">
                     {task.title}
                   </h3>
-                  <p className="text-amber-700 text-sm" style={{ fontFamily: 'Georgia, serif' }}>
-                    {task.time}
-                  </p>
+                  <p className="task-time">{task.time}</p>
                 </div>
                 
                 <button
                   onClick={() => deleteTask(task.id)}
-                  className="text-rose-500 hover:text-rose-700 transition-colors p-2 rounded-full hover:bg-rose-100"
+                  className="delete-btn"
                 >
                   <Trash2 size={18} />
                 </button>
@@ -188,44 +181,30 @@ export default function TimetableTracker() {
 
           {/* Add Task Button */}
           {!showAddTask ? (
-            <button
-              onClick={() => setShowAddTask(true)}
-              className="w-full bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white rounded-2xl py-3 flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-lg font-semibold"
-              style={{ fontFamily: 'Georgia, serif' }}
-            >
+            <button onClick={() => setShowAddTask(true)} className="btn btn-add-task">
               <Plus size={20} />
               Add New Task
             </button>
           ) : (
-            <div className="bg-white/70 rounded-2xl p-4 border-2 border-amber-300">
+            <div className="add-task-form">
               <input
                 type="text"
                 placeholder="Task title"
                 value={newTask.title}
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                className="w-full bg-white/80 border-2 border-amber-200 rounded-xl px-4 py-2 mb-3 outline-none focus:border-amber-400 transition-colors"
-                style={{ fontFamily: 'Georgia, serif' }}
+                className="input-field"
               />
               <input
                 type="time"
                 value={newTask.time}
                 onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
-                className="w-full bg-white/80 border-2 border-amber-200 rounded-xl px-4 py-2 mb-3 outline-none focus:border-amber-400 transition-colors"
-                style={{ fontFamily: 'Georgia, serif' }}
+                className="input-field"
               />
-              <div className="flex gap-2">
-                <button
-                  onClick={addTask}
-                  className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-xl py-2 transition-colors font-semibold"
-                  style={{ fontFamily: 'Georgia, serif' }}
-                >
+              <div className="form-actions">
+                <button onClick={addTask} className="btn btn-confirm">
                   Add
                 </button>
-                <button
-                  onClick={() => setShowAddTask(false)}
-                  className="flex-1 bg-gray-400 hover:bg-gray-500 text-white rounded-xl py-2 transition-colors font-semibold"
-                  style={{ fontFamily: 'Georgia, serif' }}
-                >
+                <button onClick={() => setShowAddTask(false)} className="btn btn-cancel">
                   Cancel
                 </button>
               </div>
@@ -234,7 +213,7 @@ export default function TimetableTracker() {
         </div>
 
         {/* Footer Note */}
-        <p className="text-center text-amber-700 mt-6 text-sm" style={{ fontFamily: 'Georgia, serif' }}>
+        <p className="footer-note">
           💡 Your progress is saved automatically. Export to backup your data!
         </p>
       </div>
