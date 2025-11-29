@@ -22,7 +22,8 @@ const [tasks, setTasks] = useState([
   
   const [progress, setProgress] = useState({});
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [newTask, setNewTask] = useState({ title: '', time: '' });
+  const [newTask, setNewTask] = useState({ title: '', startTime: '', endTime: '' });
+  const [draggedTaskId, setDraggedTaskId] = useState(null);
   const [showAddTask, setShowAddTask] = useState(false);
 
   // Load data from localStorage on mount
@@ -55,11 +56,29 @@ const [tasks, setTasks] = useState([
   };
 
   const addTask = () => {
-    if (newTask.title && newTask.time) {
-      setTasks([...tasks, { id: Date.now(), ...newTask }]);
-      setNewTask({ title: '', time: '' });
-      setShowAddTask(false);
+    if (!newTask.title) return;
+
+    // Build a readable time string from start/end inputs
+    const formatTime = (t) => {
+      if (!t) return '';
+      const [hh, mm] = t.split(':').map(Number);
+      const period = hh >= 12 ? 'PM' : 'AM';
+      const hour = ((hh + 11) % 12) + 1;
+      return `${hour}:${mm.toString().padStart(2, '0')} ${period}`;
+    };
+
+    let timeLabel = '';
+    if (newTask.startTime && newTask.endTime) {
+      timeLabel = `${formatTime(newTask.startTime)} - ${formatTime(newTask.endTime)}`;
+    } else if (newTask.startTime) {
+      timeLabel = formatTime(newTask.startTime);
+    } else if (newTask.endTime) {
+      timeLabel = formatTime(newTask.endTime);
     }
+
+    setTasks([...tasks, { id: Date.now(), title: newTask.title, time: timeLabel }]);
+    setNewTask({ title: '', startTime: '', endTime: '' });
+    setShowAddTask(false);
   };
 
   const deleteTask = (taskId) => {
@@ -161,6 +180,22 @@ const [tasks, setTasks] = useState([
               <div
                 key={task.id}
                 className={`task-item ${progress[selectedDate]?.[task.id] ? 'completed' : ''}`}
+                draggable
+                onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggedTaskId(task.id); }}
+                onDragOver={(e) => { e.preventDefault(); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedTaskId == null || draggedTaskId === task.id) return;
+                  const fromIndex = tasks.findIndex(t => t.id === draggedTaskId);
+                  const toIndex = tasks.findIndex(t => t.id === task.id);
+                  if (fromIndex === -1 || toIndex === -1) return;
+                  const updated = [...tasks];
+                  const [moved] = updated.splice(fromIndex, 1);
+                  updated.splice(toIndex, 0, moved);
+                  setTasks(updated);
+                  setDraggedTaskId(null);
+                }}
+                onDragEnd={() => setDraggedTaskId(null)}
               >
                 <button
                   onClick={() => toggleTask(task.id)}
@@ -198,17 +233,30 @@ const [tasks, setTasks] = useState([
             <div className="add-task-form">
               <input
                 type="text"
-                placeholder="Task title"
+                placeholder="Task title (e.g., Study Algorithms)"
                 value={newTask.title}
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                 className="input-field"
               />
-              <input
-                type="time"
-                value={newTask.time}
-                onChange={(e) => setNewTask({ ...newTask, time: e.target.value })}
-                className="input-field"
-              />
+              <div className="time-row">
+                <input
+                  type="time"
+                  value={newTask.startTime}
+                  onChange={(e) => setNewTask({ ...newTask, startTime: e.target.value })}
+                  className="input-field"
+                  aria-label="Start time"
+                  title="Start time"
+                />
+                <span className="time-sep">—</span>
+                <input
+                  type="time"
+                  value={newTask.endTime}
+                  onChange={(e) => setNewTask({ ...newTask, endTime: e.target.value })}
+                  className="input-field"
+                  aria-label="End time"
+                  title="End time"
+                />
+              </div>
               <div className="form-actions">
                 <button onClick={addTask} className="btn btn-confirm">
                   Add
